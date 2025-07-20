@@ -25,6 +25,9 @@ ScriptForge is an intelligent test automation platform that transforms natural l
 - 📝 **Script Management**: Save, organize, and download your generated scripts
 - ✅ **Validation & Execution**: Validate and run your scripts directly from the platform
 - 💡 **Smart Suggestions**: Get intelligent recommendations to improve your tests
+- 🎯 **Context-Aware Generation**: Analyzes target pages to use accurate selectors
+- 🔍 **Page Analysis**: Automatically discovers elements and forms on web pages
+- 🤝 **Multiple AI Providers**: Supports both Anthropic Claude and Google Gemini
 
 ## Quick Start
 
@@ -156,6 +159,8 @@ and verify that error messages appear for required fields"
 ### Chat API
 - `POST /api/chat/message` - Send a message and get script generation
 - `GET /api/chat/conversation/:id` - Get conversation history
+- `POST /api/chat/analyze-page` - Analyze a web page to discover elements and forms
+- `POST /api/chat/suggest-elements` - Get element suggestions for specific actions
 
 ### Scripts API
 - `GET /api/scripts` - List all scripts
@@ -196,29 +201,31 @@ ScriptForge follows a clean, modular architecture with MongoDB integration:
 ```
 src/
 ├── controllers/         # Express route controllers
-│   ├── chatController.ts    # Handles chat interactions
-│   └── scriptController.ts  # Manages script operations
+│   ├── ChatController.ts    # Handles chat interactions and API endpoints
+│   └── ScriptController.ts  # Manages script operations
 ├── models/             # MongoDB Mongoose models
 │   ├── Script.ts          # Script schema and model
 │   └── Execution.ts       # Execution history schema
 ├── services/           # Business logic services
-│   ├── NLPService.ts         # Natural language processing with Google Gemini
+│   ├── NLPService.ts         # Natural language processing with AI providers
+│   ├── ContextAwareNLPService.ts # Enhanced NLP with page context
+│   ├── PageAnalyzerService.ts    # Web page analysis and element discovery
 │   ├── database.ts           # MongoDB connection service
 │   ├── ScriptGeneratorService.ts # Script generation logic
 │   ├── ScriptExecutorService.ts  # Script execution logic
 │   └── ScriptStorageService.ts   # MongoDB data operations
-├── types/             # TypeScript type definitions
+├── types/              # TypeScript type definitions
 │   └── index.ts           # Core type definitions
-└── utils/             # Utility functions
-    └── logger.ts          # Logging utilities
+└── utils/              # Utility functions
+    └── testNameGenerator.ts # Test naming utilities
 
-public/                # Static web assets
+public/                 # Static web assets
 ├── css/                  # Stylesheets
 ├── js/                   # Client-side JavaScript
 └── index.html           # Main application UI
 
-tests/                 # Playwright test files
-temp/                  # Temporary script execution files
+tests/                  # Playwright test files
+temp/                   # Temporary script execution files
 ```
 
 ### Data Storage
@@ -327,6 +334,15 @@ You can extend ScriptForge's command understanding by modifying the AI prompt in
 
 ## Advanced Features
 
+### Context-Aware Test Generation
+
+ScriptForge now analyzes target web pages before generating tests, ensuring accurate selector generation:
+
+- **Automatic Page Analysis**: Discovers all interactive elements, forms, and their properties
+- **Smart Selector Generation**: Prioritizes reliable selectors (data-testid > ID > unique classes)
+- **Form Detection**: Automatically identifies form fields and submit buttons
+- **Element Validation**: Ensures elements are visible and interactive before generating actions
+
 ### Custom Selectors
 
 ScriptForge supports various selector strategies:
@@ -421,6 +437,15 @@ This project is licensed under the ISC License.
 - Built with [Playwright](https://playwright.dev/) for reliable browser automation
 - Powered by [Anthropic Claude](https://www.anthropic.com/) and [Google Gemini](https://deepmind.google/technologies/gemini/) for natural language understanding
 - Inspired by the need for accessible test automation
+
+## Changelog
+
+### Latest Updates
+- **Context-Aware Generation**: Added intelligent page analysis for accurate selector generation
+- **Multiple AI Providers**: Added support for Anthropic Claude (default) and Google Gemini
+- **Enhanced Error Handling**: Improved error messages and fallback mechanisms
+- **Better Selector Generation**: Fixed issues with generic selectors like 'body'
+- **Code Cleanup**: Removed unused functions and optimized codebase
 
 ---
 
