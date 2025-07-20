@@ -1,0 +1,1610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScriptForge - Intelligent Test Automation</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #ffffff;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: #1e40af;
+            padding: 1rem 2rem;
+            border-bottom: 2px solid #3b82f6;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+        }
+
+        .header h1 {
+            color: white;
+            font-size: 2rem;
+            text-align: center;
+        }
+
+        .header p {
+            color: rgba(255, 255, 255, 0.9);
+            text-align: center;
+            margin-top: 0.5rem;
+        }
+
+        .container {
+            display: flex;
+            flex: 1;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+            gap: 1rem;
+            padding: 1rem;
+        }
+
+        .chat-panel {
+            flex: 1;
+            background: #ffffff;
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+            border: 1px solid #e5e7eb;
+        }
+
+        .scripts-panel {
+            width: 350px;
+            background: #ffffff;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+            border: 1px solid #e5e7eb;
+        }
+
+        .panel-header {
+            background: #3b82f6;
+            color: white;
+            padding: 1rem;
+            font-weight: bold;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            max-height: 400px;
+        }
+
+        .message {
+            margin-bottom: 1rem;
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+
+        .message.user {
+            background: #dbeafe;
+            margin-left: auto;
+            text-align: right;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .message.assistant {
+            background: #f8fafc;
+            border-left: 4px solid #1e40af;
+        }
+
+        .message.assistant pre {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 0.5rem 0;
+            overflow-x: auto;
+            font-size: 0.9rem;
+        }
+
+        .chat-input {
+            display: flex;
+            padding: 1rem;
+            gap: 0.5rem;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 0.75rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .chat-input input:focus {
+            border-color: #3b82f6;
+        }
+
+        .chat-input button {
+            padding: 0.75rem 1.5rem;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+
+        .chat-input button:hover {
+            background: #1e40af;
+        }
+
+        .scripts-list {
+            padding: 1rem;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .script-item {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            transition: all 0.2s;
+        }
+
+        .script-item:hover {
+            border-color: #3b82f6;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+        }
+
+        .script-name {
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 0.25rem;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .script-name-display {
+            flex: 1;
+            cursor: pointer;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .script-name-display:hover {
+            background: #f1f5f9;
+        }
+
+        .script-name-edit {
+            display: none;
+            flex: 1;
+            padding: 0.25rem 0.5rem;
+            border: 2px solid #3b82f6;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-weight: bold;
+            color: #2d3748;
+            background: #ffffff;
+        }
+
+        .script-name-edit:focus {
+            outline: none;
+            border-color: #1e40af;
+        }
+
+        .edit-name-btn {
+            padding: 0.25rem 0.5rem;
+            background: transparent;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #6b7280;
+            transition: all 0.2s;
+        }
+
+        .edit-name-btn:hover {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+
+        .name-edit-actions {
+            display: none;
+            gap: 0.25rem;
+        }
+
+        .name-edit-actions.active {
+            display: flex;
+        }
+
+        .script-description {
+            color: #718096;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .script-status {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .status-draft { background: #fed7d7; color: #c53030; }
+        .status-ready { background: #c6f6d5; color: #38a169; }
+        .status-running { background: #feebc8; color: #d69e2e; }
+        .status-completed { background: #bee3f8; color: #3182ce; }
+        .status-failed { background: #fed7d7; color: #e53e3e; }
+
+        .script-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1e40af;
+        }
+
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+            border: 1px solid #cbd5e1;
+        }
+
+        .btn-secondary:hover {
+            background: #e2e8f0;
+            border-color: #3b82f6;
+        }
+
+        .btn-success {
+            background: #1d4ed8;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #1e40af;
+        }
+
+        .btn-danger {
+            background: #e53e3e;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c53030;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-warning {
+            background: #2563eb;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #1d4ed8;
+        }
+
+        .selected-script {
+            background: #dbeafe;
+            border: 2px solid #3b82f6;
+        }
+
+        .script-selector {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 1rem;
+            margin: 1rem;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .script-selector h4 {
+            color: #2d3748;
+            margin-bottom: 0.5rem;
+        }
+
+        .script-selector p {
+            color: #718096;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        .execution-result {
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-size: 0.875rem;
+        }
+
+        .result-success {
+            background: #f0fff4;
+            color: #38a169;
+            border: 1px solid #c6f6d5;
+        }
+
+        .result-error {
+            background: #fff5f5;
+            color: #e53e3e;
+            border: 1px solid #fed7d7;
+        }
+
+        .execution-console {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            max-width: 800px;
+            height: 60%;
+            background: #1a202c;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .execution-console.hidden {
+            display: none;
+        }
+
+        .execution-console.visible {
+            display: flex;
+        }
+
+        .console-header {
+            background: #1e40af;
+            color: white;
+            padding: 1rem;
+            border-radius: 12px 12px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .console-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+        }
+
+        .console-close {
+            background: #e53e3e;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .console-close:hover {
+            background: #c53030;
+        }
+
+        .console-body {
+            flex: 1;
+            padding: 1rem;
+            background: #1a202c;
+            color: #e2e8f0;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            border-radius: 0 0 12px 12px;
+        }
+
+        .console-line {
+            margin: 0.2rem 0;
+        }
+
+        .console-line.success {
+            color: #68d391;
+        }
+
+        .console-line.error {
+            color: #fc8181;
+        }
+
+        .console-line.info {
+            color: #63b3ed;
+        }
+
+        .console-line.warning {
+            color: #f6ad55;
+        }
+
+        .console-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+
+        .console-overlay.visible {
+            display: block;
+        }
+
+        .script-viewer {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            max-width: 900px;
+            height: 70%;
+            background: #f8f9fa;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .script-viewer.hidden {
+            display: none;
+        }
+
+        .script-viewer.visible {
+            display: flex;
+        }
+
+        .viewer-header {
+            background: #3b82f6;
+            color: white;
+            padding: 1rem;
+            border-radius: 12px 12px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .viewer-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+        }
+
+        .viewer-close {
+            background: #e53e3e;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .viewer-close:hover {
+            background: #c53030;
+        }
+
+        .viewer-body {
+            flex: 1;
+            padding: 1.5rem;
+            background: #ffffff;
+            overflow-y: auto;
+            border-radius: 0 0 12px 12px;
+        }
+
+        .script-content {
+            background: #2d3748;
+            color: #e2e8f0;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            padding: 1.5rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            border: 1px solid #e2e8f0;
+        }
+
+        .script-content .keyword {
+            color: #9f7efe;
+            font-weight: bold;
+        }
+
+        .script-content .string {
+            color: #68d391;
+        }
+
+        .script-content .comment {
+            color: #a0aec0;
+            font-style: italic;
+        }
+
+        .script-content .function {
+            color: #63b3ed;
+        }
+
+        .script-info {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .script-info h4 {
+            color: #2d3748;
+            margin: 0 0 0.5rem 0;
+            font-size: 1rem;
+        }
+
+        .script-info p {
+            color: #718096;
+            margin: 0.25rem 0;
+            font-size: 0.9rem;
+        }
+
+        .viewer-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+        }
+
+        .viewer-overlay.visible {
+            display: block;
+        }
+
+        .delete-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            z-index: 1002;
+            border: 1px solid #e5e7eb;
+        }
+
+        .delete-modal.visible {
+            display: block;
+        }
+
+        .delete-modal-header {
+            background: #ef4444;
+            color: white;
+            padding: 1rem;
+            border-radius: 12px 12px 0 0;
+            text-align: center;
+        }
+
+        .delete-modal-body {
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .delete-modal-body h4 {
+            color: #1f2937;
+            margin-bottom: 0.5rem;
+        }
+
+        .delete-modal-body p {
+            color: #6b7280;
+            margin-bottom: 1.5rem;
+        }
+
+        .delete-modal-actions {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+        }
+
+        .delete-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 1001;
+        }
+
+        .delete-overlay.visible {
+            display: block;
+        }
+
+        .suggestions {
+            background: #f8fafc;
+            border-left: 4px solid #3b82f6;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .suggestions h4 {
+            color: #4a5568;
+            margin-bottom: 0.5rem;
+        }
+
+        .suggestions ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .suggestions li {
+            color: #718096;
+            margin-bottom: 0.25rem;
+            padding-left: 1rem;
+            position: relative;
+        }
+
+        .suggestions li:before {
+            content: "💡";
+            position: absolute;
+            left: 0;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            color: #718096;
+            font-style: italic;
+            padding: 1rem;
+        }
+
+        .examples {
+            background: #f8fafc;
+            padding: 1rem;
+            margin: 1rem;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .examples h4 {
+            color: #2d3748;
+            margin-bottom: 0.5rem;
+        }
+
+        .examples p {
+            color: #718096;
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .scripts-panel {
+                width: 100%;
+                max-height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1><i class="fas fa-code"></i> ScriptForge</h1>
+        <p>Where conversations become test automation</p>
+    </div>
+
+    <div class="container">
+        <div class="chat-panel">
+            <div class="panel-header">
+                <i class="fas fa-comments"></i> Chat with ScriptForge
+            </div>
+            
+            <div class="examples">
+                <h4>Try saying:</h4>
+                <p>"Go to google.com and search for 'playwright testing'"</p>
+                <p>"Click the login button and enter my credentials"</p>
+                <p>"Take a screenshot of the homepage"</p>
+                <p>"Check that the page title contains 'Welcome'"</p>
+            </div>
+            
+            <div class="script-selector" id="scriptSelector" style="display: none;">
+                <h4><i class="fas fa-edit"></i> Modify Existing Test</h4>
+                <p>Selected test: <span id="selectedScriptName">None</span></p>
+                <button class="btn btn-secondary" onclick="clearSelectedScript()"><i class="fas fa-times"></i> Clear Selection</button>
+            </div>
+            
+            <div class="chat-messages" id="chatMessages">
+                <div class="message assistant">
+                    <div>Hello! I'm ScriptForge, your intelligent test automation assistant. Tell me what you'd like to test, and I'll generate a Playwright script for you!</div>
+                </div>
+            </div>
+            
+            <div class="loading" id="loading">
+                Generating script...
+            </div>
+            
+            <div class="chat-input">
+                <input type="text" id="messageInput" placeholder="Describe what you want to test..." maxlength="500">
+                <button onclick="sendMessage()"><i class="fas fa-paper-plane"></i> Send</button>
+            </div>
+        </div>
+
+        <div class="scripts-panel">
+            <div class="panel-header">
+                <i class="fas fa-file-code"></i> Generated Scripts
+            </div>
+            <div class="scripts-list" id="scriptsList">
+                <div style="text-align: center; color: #718096; padding: 2rem;">
+                    No scripts generated yet. Start chatting to create your first test!
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Execution Console Modal -->
+    <div class="console-overlay" id="consoleOverlay" onclick="closeExecutionConsole()"></div>
+    <div class="execution-console hidden" id="executionConsole">
+        <div class="console-header">
+            <h3 id="consoleTitle"><i class="fas fa-terminal"></i> Test Execution</h3>
+            <button class="console-close" onclick="closeExecutionConsole()"><i class="fas fa-times"></i> Close</button>
+        </div>
+        <div class="console-body" id="consoleBody">
+            <div class="console-line info">Initializing test execution...</div>
+        </div>
+    </div>
+
+    <!-- Script Viewer Modal -->
+    <div class="viewer-overlay" id="viewerOverlay" onclick="closeScriptViewer()"></div>
+    <div class="script-viewer hidden" id="scriptViewer">
+        <div class="viewer-header">
+            <h3 id="viewerTitle"><i class="fas fa-code"></i> Script Steps</h3>
+            <button class="viewer-close" onclick="closeScriptViewer()"><i class="fas fa-times"></i> Close</button>
+        </div>
+        <div class="viewer-body" id="viewerBody">
+            <div class="script-info">
+                <h4 id="scriptInfoName">Script Name</h4>
+                <p id="scriptInfoDescription">Description</p>
+                <p id="scriptInfoStatus">Status: <span id="scriptInfoStatusValue">ready</span></p>
+                <p id="scriptInfoDates">Created: <span id="scriptInfoCreated">-</span> | Updated: <span id="scriptInfoUpdated">-</span></p>
+            </div>
+            <div class="script-content" id="scriptContent">
+                Loading script content...
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="delete-overlay" id="deleteOverlay" onclick="closeDeleteModal()"></div>
+    <div class="delete-modal" id="deleteModal">
+        <div class="delete-modal-header">
+            <h3><i class="fas fa-exclamation-triangle"></i> Confirm Delete</h3>
+        </div>
+        <div class="delete-modal-body">
+            <h4 id="deleteScriptName">Delete Script?</h4>
+            <p>This action cannot be undone. The script will be permanently deleted.</p>
+            <div class="delete-modal-actions">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+                <button class="btn btn-danger" onclick="deleteScript()" id="confirmDeleteBtn">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const conversationId = 'conv-' + Date.now();
+        const scripts = new Map();
+        let scriptCounter = 0;
+        let serverConnected = false;
+        let selectedScriptId = null;
+        let scriptToDelete = null;
+
+        socket.emit('join-conversation', conversationId);
+
+        socket.on('connect', () => {
+            serverConnected = true;
+            console.log('Connected to server');
+        });
+
+        socket.on('disconnect', () => {
+            serverConnected = false;
+            console.log('Disconnected from server');
+            displayNotification('<i class="fas fa-exclamation-triangle" style="color: #f59e0b;"></i> Connection to server lost. Please refresh the page.', false);
+        });
+
+        socket.on('message', (message) => {
+            displayMessage(message);
+        });
+
+        socket.on('script-generated', (data) => {
+            hideLoading();
+            if (data.script) {
+                addGeneratedScript(data.script, data.suggestions, data.testName, data.testDescription);
+            }
+        });
+
+        socket.on('script-updated', (data) => {
+            hideLoading();
+            if (data.script && data.scriptId && data.updatedScript) {
+                updateExistingScript(data.scriptId, data.updatedScript);
+                displayMessage({
+                    content: `<i class="fas fa-check-circle" style="color: #38a169;"></i> Successfully added steps to "${data.updatedScript.name}"!`,
+                    role: 'assistant',
+                    timestamp: new Date()
+                });
+                
+                // Clear selection after successful update
+                clearSelectedScript();
+                
+                if (data.suggestions && data.suggestions.length > 0) {
+                    displaySuggestions(data.suggestions);
+                }
+            }
+        });
+
+        socket.on('execution-output', (data) => {
+            addConsoleOutput(data.output, data.type || 'info');
+        });
+
+        socket.on('execution-complete', (data) => {
+            addConsoleOutput('Test execution completed', 'success');
+            setTimeout(() => {
+                closeExecutionConsole();
+            }, 3000);
+        });
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+
+            displayMessage({
+                content: message,
+                role: 'user',
+                timestamp: new Date()
+            });
+
+            showLoading();
+            
+            socket.emit('send-message', {
+                message: message,
+                conversationId: conversationId,
+                selectedScriptId: selectedScriptId
+            });
+
+            input.value = '';
+        }
+
+        function displayMessage(message) {
+            const messagesContainer = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${message.role}`;
+            
+            let content = message.content;
+            
+            // Format code blocks
+            if (content.includes('import { test')) {
+                content = content.replace(/```[\w]*\n?/g, '');
+                content = `<pre><code>${content}</code></pre>`;
+            }
+            
+            messageDiv.innerHTML = `<div>${content}</div>`;
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            hideLoading();
+        }
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function addGeneratedScript(scriptContent, suggestions, testName, testDescription) {
+            const script = {
+                name: testName || `Generated Test ${Date.now()}`,
+                description: testDescription || 'Auto-generated from conversation',
+                script: scriptContent,
+                status: 'ready',
+                createdAt: new Date(),
+                executionResult: null
+            };
+            
+            // Save script to backend first and use the returned ID
+            fetch('/api/scripts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(script)
+            }).then(response => response.json())
+            .then(data => {
+                if (data.script) {
+                    // Use the backend ID and store the complete script
+                    const backendScript = {
+                        ...data.script,
+                        executionResult: null
+                    };
+                    scripts.set(data.script.id, backendScript);
+                    updateScriptsList();
+                }
+            }).catch(error => {
+                console.error('Failed to save script:', error);
+                // Fallback: use temporary ID if backend save fails
+                scriptCounter++;
+                const tempId = 'temp-' + scriptCounter;
+                script.id = tempId;
+                scripts.set(tempId, script);
+                updateScriptsList();
+            });
+            
+            if (suggestions && suggestions.length > 0) {
+                displaySuggestions(suggestions);
+            }
+        }
+
+        function updateExistingScript(scriptId, updatedScript) {
+            // Update the script in our local map
+            const existingScript = scripts.get(scriptId);
+            if (existingScript) {
+                const mergedScript = {
+                    ...existingScript,
+                    ...updatedScript,
+                    executionResult: existingScript.executionResult // Preserve execution result
+                };
+                scripts.set(scriptId, mergedScript);
+                updateScriptsList();
+            }
+        }
+
+        function displaySuggestions(suggestions) {
+            const messagesContainer = document.getElementById('chatMessages');
+            const suggestionsDiv = document.createElement('div');
+            suggestionsDiv.className = 'suggestions';
+            
+            let suggestionsHtml = '<h4><i class="fas fa-lightbulb"></i> Suggestions:</h4><ul>';
+            suggestions.forEach(suggestion => {
+                suggestionsHtml += `<li>${suggestion}</li>`;
+            });
+            suggestionsHtml += '</ul>';
+            
+            suggestionsDiv.innerHTML = suggestionsHtml;
+            messagesContainer.appendChild(suggestionsDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function updateScriptsList() {
+            const scriptsList = document.getElementById('scriptsList');
+            
+            if (scripts.size === 0) {
+                scriptsList.innerHTML = `
+                    <div style="text-align: center; color: #718096; padding: 2rem;">
+                        No scripts generated yet. Start chatting to create your first test!
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            scripts.forEach(script => {
+                const isRunning = script.status === 'running';
+                const isTemp = script.id && script.id.startsWith('temp-');
+                const canRun = !isRunning && !isTemp;
+                
+                const executionResultHtml = script.executionResult ? 
+                    `<div class="execution-result ${script.executionResult.success ? 'result-success' : 'result-error'}">
+                        ${script.executionResult.success ? '<i class="fas fa-check-circle"></i> Test passed' : '<i class="fas fa-times-circle"></i> Test failed'} 
+                        (${script.executionResult.duration}ms)
+                    </div>` : '';
+                
+                let runButtonText = '<i class="fas fa-play"></i> Run Test';
+                if (isRunning) runButtonText = '<i class="fas fa-spinner fa-spin"></i> Running...';
+                else if (isTemp) runButtonText = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+                
+                const isSelected = selectedScriptId === script.id;
+                html += `
+                    <div class="script-item ${isSelected ? 'selected-script' : ''}">
+                        <div class="script-name">
+                            <div class="script-name-display" onclick="startEditName('${script.id}')" title="Click to edit name">
+                                ${script.name}
+                            </div>
+                            <input class="script-name-edit" id="edit-${script.id}" value="${script.name}" 
+                                   onblur="cancelEditName('${script.id}')" 
+                                   onkeydown="handleNameEdit(event, '${script.id}')"
+                                   maxlength="100">
+                            <button class="edit-name-btn" onclick="startEditName('${script.id}')" title="Edit name">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <div class="name-edit-actions" id="actions-${script.id}">
+                                <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="saveEditName('${script.id}')">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="cancelEditName('${script.id}')">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="script-description">${script.description}</div>
+                        <div class="script-status status-${script.status}">${script.status}</div>
+                        ${executionResultHtml}
+                        <div class="script-actions">
+                            <button class="btn btn-primary" onclick="runScript('${script.id}')" ${!canRun ? 'disabled' : ''}>
+                                ${runButtonText}
+                            </button>
+                            <button class="btn btn-warning" onclick="selectScriptForModification('${script.id}')" ${isTemp ? 'disabled' : ''}>
+                                <i class="fas fa-plus"></i> Add Steps
+                            </button>
+                            <button class="btn btn-success" onclick="viewScriptSteps('${script.id}')" ${isTemp ? 'disabled' : ''}>
+                                <i class="fas fa-eye"></i> View Steps
+                            </button>
+                            <button class="btn btn-secondary" onclick="downloadScript('${script.id}')" ${isTemp ? 'disabled' : ''}>
+                                <i class="fas fa-download"></i> Download
+                            </button>
+                            <button class="btn btn-danger" onclick="confirmDeleteScript('${script.id}')" ${isTemp ? 'disabled' : ''}>
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            scriptsList.innerHTML = html;
+        }
+
+        function runScript(scriptId) {
+            const script = scripts.get(scriptId);
+            if (!script) {
+                console.error('Script not found:', scriptId);
+                displayNotification('<i class="fas fa-exclamation-triangle" style="color: #e53e3e;"></i> Script not found. Please try regenerating the test.', false);
+                return;
+            }
+            
+            // Check server connection
+            if (!serverConnected) {
+                displayNotification('<i class="fas fa-wifi" style="color: #e53e3e;"></i> Not connected to server. Please refresh the page.', false);
+                return;
+            }
+            
+            // Skip if script is temporary/unsaved
+            if (scriptId.startsWith('temp-')) {
+                displayNotification('<i class="fas fa-clock" style="color: #f59e0b;"></i> Please wait for script to be saved before running.', false);
+                return;
+            }
+            
+            // Update status to running
+            script.status = 'running';
+            script.executionResult = null;
+            updateScriptsList();
+            
+            // Show execution console
+            showExecutionConsole(script.name);
+            
+            // Execute the script
+            fetch(`/api/scripts/${scriptId}/execute`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                timeout: 60000 // 60 second timeout
+            })
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        throw new Error('Script not found on server');
+                    } else if (response.status === 500) {
+                        throw new Error('Server error during execution');
+                    } else {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.result) {
+                    script.executionResult = data.result;
+                    script.status = data.result.success ? 'completed' : 'failed';
+                } else {
+                    script.status = 'failed';
+                    script.executionResult = {
+                        success: false,
+                        error: data.error || data.details || 'Unknown error',
+                        duration: 0
+                    };
+                }
+                updateScriptsList();
+                
+                // Show notification
+                const message = script.executionResult.success ? 
+                    `<i class="fas fa-check-circle" style="color: #38a169;"></i> Test "${script.name}" passed successfully!` :
+                    `<i class="fas fa-times-circle" style="color: #e53e3e;"></i> Test "${script.name}" failed: ${script.executionResult.error}`;
+                    
+                displayNotification(message, script.executionResult.success);
+            })
+            .catch(error => {
+                console.error('Script execution error:', error);
+                script.status = 'failed';
+                
+                let errorMessage = 'Unknown error';
+                if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    errorMessage = 'Cannot connect to server. Please check if the server is running.';
+                } else if (error.message.includes('Failed to fetch')) {
+                    errorMessage = 'Network error - server may be down or unreachable';
+                } else {
+                    errorMessage = error.message || 'Network error occurred';
+                }
+                
+                script.executionResult = {
+                    success: false,
+                    error: errorMessage,
+                    duration: 0
+                };
+                updateScriptsList();
+                displayNotification(`<i class="fas fa-times-circle" style="color: #e53e3e;"></i> Failed to run test "${script.name}": ${errorMessage}`, false);
+            });
+        }
+
+        function downloadScript(scriptId) {
+            const script = scripts.get(scriptId);
+            if (!script) return;
+            
+            const blob = new Blob([script.script], { type: 'text/typescript' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${script.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.spec.ts`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function displayNotification(message, isSuccess) {
+            const messagesContainer = document.getElementById('chatMessages');
+            const notificationDiv = document.createElement('div');
+            notificationDiv.className = `execution-result ${isSuccess ? 'result-success' : 'result-error'}`;
+            notificationDiv.style.margin = '1rem 0';
+            notificationDiv.textContent = message;
+            
+            messagesContainer.appendChild(notificationDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (notificationDiv.parentNode) {
+                    notificationDiv.parentNode.removeChild(notificationDiv);
+                }
+            }, 5000);
+        }
+
+        // Handle Enter key in chat input
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Execution Console Functions
+        function showExecutionConsole(scriptName) {
+            const console = document.getElementById('executionConsole');
+            const overlay = document.getElementById('consoleOverlay');
+            const title = document.getElementById('consoleTitle');
+            const body = document.getElementById('consoleBody');
+            
+            title.textContent = `Executing: ${scriptName}`;
+            body.innerHTML = '<div class="console-line info">Starting test execution...</div>';
+            
+            console.classList.remove('hidden');
+            console.classList.add('visible');
+            overlay.classList.add('visible');
+        }
+
+        function closeExecutionConsole() {
+            const console = document.getElementById('executionConsole');
+            const overlay = document.getElementById('consoleOverlay');
+            
+            console.classList.remove('visible');
+            console.classList.add('hidden');
+            overlay.classList.remove('visible');
+        }
+
+        function addConsoleOutput(output, type = 'info') {
+            const body = document.getElementById('consoleBody');
+            const line = document.createElement('div');
+            line.className = `console-line ${type}`;
+            line.textContent = output;
+            
+            body.appendChild(line);
+            body.scrollTop = body.scrollHeight;
+        }
+
+        function clearConsoleOutput() {
+            const body = document.getElementById('consoleBody');
+            body.innerHTML = '';
+        }
+
+        // Script Viewer Functions
+        function viewScriptSteps(scriptId) {
+            const script = scripts.get(scriptId);
+            if (!script) {
+                console.error('Script not found:', scriptId);
+                return;
+            }
+            
+            showScriptViewer(script);
+        }
+
+        function showScriptViewer(script) {
+            const viewer = document.getElementById('scriptViewer');
+            const overlay = document.getElementById('viewerOverlay');
+            
+            // Update script info
+            document.getElementById('scriptInfoName').textContent = script.name;
+            document.getElementById('scriptInfoDescription').textContent = script.description;
+            document.getElementById('scriptInfoStatusValue').textContent = script.status;
+            document.getElementById('scriptInfoCreated').textContent = new Date(script.createdAt).toLocaleString();
+            document.getElementById('scriptInfoUpdated').textContent = new Date(script.updatedAt).toLocaleString();
+            
+            // Format and display script content
+            const formattedScript = formatScriptContent(script.script);
+            document.getElementById('scriptContent').innerHTML = addSyntaxHighlighting(formattedScript);
+            
+            viewer.classList.remove('hidden');
+            viewer.classList.add('visible');
+            overlay.classList.add('visible');
+        }
+
+        function closeScriptViewer() {
+            const viewer = document.getElementById('scriptViewer');
+            const overlay = document.getElementById('viewerOverlay');
+            
+            viewer.classList.remove('visible');
+            viewer.classList.add('hidden');
+            overlay.classList.remove('visible');
+        }
+
+        function formatScriptContent(scriptContent) {
+            // Basic formatting for better readability
+            let formatted = scriptContent;
+            
+            // Add proper indentation and spacing
+            formatted = formatted.replace(/;(\s*)(await|const|let|var|if|for|while)/g, ';\n$1$2');
+            formatted = formatted.replace(/\{(\s*)(await|const|let|var)/g, '{\n  $2');
+            formatted = formatted.replace(/(\w+\([^)]*\));/g, '$1;\n');
+            
+            // Add comments for readability
+            const lines = formatted.split('\n');
+            const improvedLines = lines.map(line => {
+                const trimmed = line.trim();
+                if (trimmed.includes('page.goto(')) {
+                    return line + '  // Navigate to page';
+                } else if (trimmed.includes('page.click(')) {
+                    return line + '  // Click element';
+                } else if (trimmed.includes('page.fill(')) {
+                    return line + '  // Fill input field';
+                } else if (trimmed.includes('expect(')) {
+                    return line + '  // Assertion';
+                } else if (trimmed.includes('page.screenshot(')) {
+                    return line + '  // Take screenshot';
+                } else if (trimmed.includes('page.waitFor')) {
+                    return line + '  // Wait for element/condition';
+                }
+                return line;
+            });
+            
+            return improvedLines.join('\n');
+        }
+
+        function addSyntaxHighlighting(code) {
+            // Escape HTML
+            let highlighted = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            
+            // Keywords
+            highlighted = highlighted.replace(/\b(import|from|test|async|await|const|let|var|if|else|for|while|expect)\b/g, '<span class="keyword">$1</span>');
+            
+            // Function names
+            highlighted = highlighted.replace(/\b(page\.\w+|expect)\(/g, '<span class="function">$1</span>(');
+            
+            // Strings
+            highlighted = highlighted.replace(/'([^']*)'/g, '<span class="string">\'$1\'</span>');
+            highlighted = highlighted.replace(/"([^"]*)"/g, '<span class="string">"$1"</span>');
+            highlighted = highlighted.replace(/`([^`]*)`/g, '<span class="string">`$1`</span>');
+            
+            // Comments
+            highlighted = highlighted.replace(/(\/\/.*$)/gm, '<span class="comment">$1</span>');
+            
+            return highlighted;
+        }
+
+        // Delete script functions
+        function confirmDeleteScript(scriptId) {
+            const script = scripts.get(scriptId);
+            if (!script) {
+                console.error('Script not found:', scriptId);
+                return;
+            }
+            
+            scriptToDelete = scriptId;
+            document.getElementById('deleteScriptName').textContent = `Delete "${script.name}"?`;
+            
+            const modal = document.getElementById('deleteModal');
+            const overlay = document.getElementById('deleteOverlay');
+            
+            modal.classList.add('visible');
+            overlay.classList.add('visible');
+        }
+
+        function closeDeleteModal() {
+            scriptToDelete = null;
+            
+            const modal = document.getElementById('deleteModal');
+            const overlay = document.getElementById('deleteOverlay');
+            
+            modal.classList.remove('visible');
+            overlay.classList.remove('visible');
+        }
+
+        function deleteScript() {
+            if (!scriptToDelete) return;
+            
+            const script = scripts.get(scriptToDelete);
+            if (!script) {
+                closeDeleteModal();
+                return;
+            }
+            
+            // Update button to show loading
+            const deleteBtn = document.getElementById('confirmDeleteBtn');
+            deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+            deleteBtn.disabled = true;
+            
+            // Call backend to delete script
+            fetch(`/api/scripts/${scriptToDelete}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Remove from local storage
+                scripts.delete(scriptToDelete);
+                
+                // Clear selection if deleted script was selected
+                if (selectedScriptId === scriptToDelete) {
+                    clearSelectedScript();
+                }
+                
+                // Update UI
+                updateScriptsList();
+                closeDeleteModal();
+                
+                // Show success notification
+                displayNotification(`<i class="fas fa-check-circle" style="color: #38a169;"></i> Script "${script.name}" deleted successfully!`, true);
+            })
+            .catch(error => {
+                console.error('Delete script error:', error);
+                
+                // Reset button
+                deleteBtn.innerHTML = '<i class="fas fa-trash"></i> Delete';
+                deleteBtn.disabled = false;
+                
+                // Show error notification
+                displayNotification(`<i class="fas fa-times-circle" style="color: #e53e3e;"></i> Failed to delete script: ${error.message}`, false);
+            });
+        }
+
+        // Script name editing functions
+        function startEditName(scriptId) {
+            const display = document.querySelector(`#script-item-${scriptId} .script-name-display`) || 
+                           document.querySelector(`.script-item .script-name-display[onclick*="${scriptId}"]`).parentElement.querySelector('.script-name-display');
+            const input = document.getElementById(`edit-${scriptId}`);
+            const editBtn = document.querySelector(`.edit-name-btn[onclick*="${scriptId}"]`);
+            const actions = document.getElementById(`actions-${scriptId}`);
+            
+            if (display && input && editBtn && actions) {
+                display.style.display = 'none';
+                editBtn.style.display = 'none';
+                input.style.display = 'block';
+                actions.classList.add('active');
+                input.focus();
+                input.select();
+            }
+        }
+
+        function cancelEditName(scriptId) {
+            const script = scripts.get(scriptId);
+            if (!script) return;
+            
+            const display = document.querySelector(`.script-name-display[onclick*="${scriptId}"]`);
+            const input = document.getElementById(`edit-${scriptId}`);
+            const editBtn = document.querySelector(`.edit-name-btn[onclick*="${scriptId}"]`);
+            const actions = document.getElementById(`actions-${scriptId}`);
+            
+            if (display && input && editBtn && actions) {
+                // Reset to original value
+                input.value = script.name;
+                
+                display.style.display = 'block';
+                editBtn.style.display = 'block';
+                input.style.display = 'none';
+                actions.classList.remove('active');
+            }
+        }
+
+        function handleNameEdit(event, scriptId) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                saveEditName(scriptId);
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                cancelEditName(scriptId);
+            }
+        }
+
+        function saveEditName(scriptId) {
+            const script = scripts.get(scriptId);
+            const input = document.getElementById(`edit-${scriptId}`);
+            
+            if (!script || !input) return;
+            
+            const newName = input.value.trim();
+            if (!newName) {
+                displayNotification('<i class="fas fa-exclamation-triangle" style="color: #f59e0b;"></i> Script name cannot be empty!', false);
+                return;
+            }
+            
+            if (newName === script.name) {
+                cancelEditName(scriptId);
+                return;
+            }
+            
+            // Update script name via API
+            fetch(`/api/scripts/${scriptId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Update local script
+                script.name = newName;
+                script.updatedAt = new Date();
+                scripts.set(scriptId, script);
+                
+                // Update UI
+                updateScriptsList();
+                
+                // Show success notification
+                displayNotification(`<i class="fas fa-check-circle" style="color: #38a169;"></i> Script name updated successfully!`, true);
+            })
+            .catch(error => {
+                console.error('Update script name error:', error);
+                displayNotification(`<i class="fas fa-times-circle" style="color: #e53e3e;"></i> Failed to update script name: ${error.message}`, false);
+                
+                // Reset input value
+                input.value = script.name;
+            });
+        }
+
+        // Script modification functions
+        function selectScriptForModification(scriptId) {
+            const script = scripts.get(scriptId);
+            if (!script) return;
+            
+            selectedScriptId = scriptId;
+            
+            // Update UI to show selection
+            document.getElementById('selectedScriptName').textContent = script.name;
+            document.getElementById('scriptSelector').style.display = 'block';
+            
+            // Update input placeholder
+            const messageInput = document.getElementById('messageInput');
+            messageInput.placeholder = `Add steps to "${script.name}"...`;
+            messageInput.focus();
+            
+            // Highlight selected script
+            updateScriptsList();
+            
+            // Show a message in chat
+            displayMessage({
+                content: `<i class="fas fa-edit" style="color: #3b82f6;"></i> Selected "${script.name}" for modification. Now describe the additional steps you want to add to this test.`,
+                role: 'assistant',
+                timestamp: new Date()
+            });
+        }
+
+        function clearSelectedScript() {
+            selectedScriptId = null;
+            
+            // Update UI
+            document.getElementById('selectedScriptName').textContent = 'None';
+            document.getElementById('scriptSelector').style.display = 'none';
+            
+            // Reset input placeholder
+            const messageInput = document.getElementById('messageInput');
+            messageInput.placeholder = 'Describe what you want to test...';
+            
+            // Remove highlight
+            updateScriptsList();
+            
+            // Show a message in chat
+            displayMessage({
+                content: '<i class="fas fa-info-circle" style="color: #3b82f6;"></i> Script selection cleared. You can now create a new test or select another script to modify.',
+                role: 'assistant',
+                timestamp: new Date()
+            });
+        }
+
+        // Load existing scripts on page load
+        fetch('/api/scripts')
+            .then(response => response.json())
+            .then(data => {
+                if (data.scripts) {
+                    data.scripts.forEach(script => {
+                        scripts.set(script.id, script);
+                    });
+                    updateScriptsList();
+                }
+            })
+            .catch(console.error);
+    </script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "watch": ["src"],
+  "ext": "ts,js",
+  "ignore": [
+    "temp/**/*",
+    "/tmp/scriptforge-temp/**/*",
+    "tests/generated_*.spec.ts",
+    "scripts.json",
+    "node_modules/**/*",
+    "dist/**/*",
+    "*.log",
+    "screenshot-*.png"
+  ],
+  "exec": "ts-node src/server.ts"
+}
