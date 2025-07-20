@@ -17,12 +17,44 @@ export interface TestScript {
 }
 
 export interface UserIntent {
-  action: 'navigate' | 'click' | 'type' | 'assert' | 'wait' | 'screenshot' | 'extract';
+  action: 'navigate' | 'click' | 'type' | 'fill' | 'assert' | 'wait' | 'screenshot' | 'extract';
   target?: string;
   value?: string;
   selector?: string;
   url?: string;
   confidence: number;
+  pageContext?: PageContext;
+}
+
+export interface PageContext {
+  url: string;
+  title: string;
+  elements: ElementInfo[];
+  forms: FormInfo[];
+  timestamp: Date;
+}
+
+export interface ElementInfo {
+  tag: string;
+  id?: string;
+  classes: string[];
+  testId?: string;
+  text?: string;
+  placeholder?: string;
+  type?: string;
+  name?: string;
+  href?: string;
+  selector: string;
+  xpath?: string;
+  isVisible: boolean;
+  isInteractive: boolean;
+}
+
+export interface FormInfo {
+  id?: string;
+  name?: string;
+  fields: ElementInfo[];
+  submitButton?: ElementInfo;
 }
 
 export interface ScriptGenerationRequest {

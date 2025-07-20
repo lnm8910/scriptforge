@@ -32,7 +32,8 @@ ScriptForge is an intelligent test automation platform that transforms natural l
 
 - Node.js 18+ 
 - npm or yarn
-- Google Gemini API key
+- MongoDB (local installation or MongoDB Atlas account)
+- AI Provider API key (Anthropic Claude or Google Gemini)
 
 ### Installation
 
@@ -52,23 +53,38 @@ npm install
 npx playwright install
 ```
 
-4. Set up environment variables:
+4. Set up MongoDB:
+   - **Option 1: Local MongoDB**
+     ```bash
+     # Install MongoDB locally (if not already installed)
+     # macOS: brew install mongodb-community
+     # Ubuntu: sudo apt-get install mongodb
+     # Start MongoDB service
+     ```
+   
+   - **Option 2: MongoDB Atlas (Cloud)**
+     - Create a free account at [MongoDB Atlas](https://www.mongodb.com/atlas)
+     - Create a cluster and get your connection string
+
+5. Set up environment variables:
 ```bash
 cp .env.example .env
-# Edit .env and add your Google Gemini API key
+# Edit .env and add:
+# - Your AI Provider API key (Anthropic or Google Gemini)
+# - MongoDB connection string (local or Atlas)
 ```
 
-5. Build the project:
+6. Build the project:
 ```bash
 npm run build
 ```
 
-6. Start the development server:
+7. Start the development server:
 ```bash
 npm run dev
 ```
 
-7. Open your browser and navigate to `http://localhost:3000`
+8. Open your browser and navigate to `http://localhost:3000`
 
 ## Usage
 
@@ -144,18 +160,24 @@ and verify that error messages appear for required fields"
 ### Scripts API
 - `GET /api/scripts` - List all scripts
 - `POST /api/scripts` - Create a new script
+- `GET /api/scripts/search?q=query` - Search scripts by name, description, or tags
+- `GET /api/scripts/executions/all` - Get all execution history
 - `GET /api/scripts/:id` - Get a specific script
 - `PUT /api/scripts/:id` - Update a script
 - `DELETE /api/scripts/:id` - Delete a script
 - `POST /api/scripts/:id/execute` - Execute a script
 - `POST /api/scripts/:id/validate` - Validate a script
 - `GET /api/scripts/:id/download` - Download script as .ts file
+- `GET /api/scripts/:id/executions` - Get execution history for a script
+- `GET /api/scripts/:id/stats` - Get execution statistics for a script
 
 ## Configuration
 
 ### Environment Variables
 
-- `GEMINI_API_KEY` - Your Google Gemini API key for natural language processing
+- `ANTHROPIC_API_KEY` - Your Anthropic Claude API key (preferred AI provider)
+- `GEMINI_API_KEY` - Your Google Gemini API key (fallback AI provider)
+- `MONGODB_URI` - MongoDB connection string (default: mongodb://localhost:27017/scriptforge)
 - `PORT` - Server port (default: 3000)
 - `NODE_ENV` - Environment (development/production)
 
@@ -169,17 +191,22 @@ The project includes a `playwright.config.ts` file with sensible defaults. You c
 
 ## Architecture
 
-ScriptForge follows a clean, modular architecture:
+ScriptForge follows a clean, modular architecture with MongoDB integration:
 
 ```
 src/
 ├── controllers/         # Express route controllers
 │   ├── chatController.ts    # Handles chat interactions
 │   └── scriptController.ts  # Manages script operations
+├── models/             # MongoDB Mongoose models
+│   ├── Script.ts          # Script schema and model
+│   └── Execution.ts       # Execution history schema
 ├── services/           # Business logic services
-│   ├── aiService.ts        # Google Gemini AI integration
-│   ├── playwrightService.ts # Script generation logic
-│   └── scriptService.ts    # Script management
+│   ├── NLPService.ts         # Natural language processing with Google Gemini
+│   ├── database.ts           # MongoDB connection service
+│   ├── ScriptGeneratorService.ts # Script generation logic
+│   ├── ScriptExecutorService.ts  # Script execution logic
+│   └── ScriptStorageService.ts   # MongoDB data operations
 ├── types/             # TypeScript type definitions
 │   └── index.ts           # Core type definitions
 └── utils/             # Utility functions
@@ -194,6 +221,15 @@ tests/                 # Playwright test files
 temp/                  # Temporary script execution files
 ```
 
+### Data Storage
+
+ScriptForge uses MongoDB for persistent storage:
+
+- **Scripts Collection**: Stores test scripts with metadata
+- **Executions Collection**: Stores execution history and results
+- **Indexed Fields**: Optimized queries for search and filtering
+- **Full-text Search**: Search across script names, descriptions, and tags
+
 ## Development
 
 ### Prerequisites for Development
@@ -201,7 +237,7 @@ temp/                  # Temporary script execution files
 - Node.js 18+ and npm
 - TypeScript knowledge (helpful but not required)
 - Basic understanding of Playwright
-- Google Gemini API key
+- AI Provider API key (Anthropic Claude or Google Gemini)
 
 ### Setting Up Development Environment
 
@@ -248,16 +284,17 @@ npm run format     # Format code with Prettier
 
 ### Creating Custom Commands
 
-You can extend ScriptForge's command understanding by modifying the AI prompt in `src/services/aiService.ts`. The system uses a structured prompt template that maps natural language to Playwright actions.
+You can extend ScriptForge's command understanding by modifying the AI prompt in `src/services/NLPService.ts`. The system uses a structured prompt template that maps natural language to Playwright actions.
 
 ## Troubleshooting
 
 ### Common Issues
 
-#### Gemini API Key Issues
-- **Error**: "Invalid API key"
-  - **Solution**: Ensure your `GEMINI_API_KEY` is correctly set in the `.env` file
+#### AI Provider API Key Issues
+- **Error**: "No AI provider API key found"
+  - **Solution**: Ensure either `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` is set in the `.env` file
   - **Note**: API keys should not contain quotes or spaces
+  - **Preference**: If both keys are present, Anthropic will be used by default
 
 #### Playwright Installation Issues
 - **Error**: "Browser executable not found"
@@ -273,6 +310,12 @@ You can extend ScriptForge's command understanding by modifying the AI prompt in
 - **Error**: "EADDRINUSE: address already in use"
   - **Solution**: Change the port in `.env` file or kill the process using the port
   - **Command**: `lsof -ti:3000 | xargs kill -9` (on macOS/Linux)
+
+#### MongoDB Connection Issues
+- **Error**: "Failed to connect to MongoDB"
+  - **Solution**: Ensure MongoDB is running locally or check your Atlas connection string
+  - **Local**: Start MongoDB service with `mongod` or `brew services start mongodb-community`
+  - **Atlas**: Verify IP whitelist settings and credentials
 
 ### Best Practices
 
@@ -372,10 +415,11 @@ This project is licensed under the ISC License.
 - 📖 **Documentation**: [docs.scriptforge.dev](https://docs.scriptforge.dev)
 - 🐛 **Issues**: [GitHub Issues](https://github.com/your-username/scriptforge/issues)
 
+
 ## Acknowledgments
 
 - Built with [Playwright](https://playwright.dev/) for reliable browser automation
-- Powered by [Google Gemini](https://deepmind.google/technologies/gemini/) for natural language understanding
+- Powered by [Anthropic Claude](https://www.anthropic.com/) and [Google Gemini](https://deepmind.google/technologies/gemini/) for natural language understanding
 - Inspired by the need for accessible test automation
 
 ---

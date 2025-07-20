@@ -1,18 +1,19 @@
 import { Router } from 'express';
 import { Server } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
-import { ChatMessage, ScriptGenerationRequest } from '../types';
-import { NLPService } from '../services/NLPService';
+import { ChatMessage } from '../types';
+import { ContextAwareNLPService } from '../services/ContextAwareNLPService';
 import { ScriptGeneratorService } from '../services/ScriptGeneratorService';
 import { ScriptStorageService } from '../services/ScriptStorageService';
 import { generateTestName, generateTestDescription } from '../utils/testNameGenerator';
 
 export class ChatController {
   private router = Router();
-  private nlpService = new NLPService();
+  private nlpService = new ContextAwareNLPService();
   private scriptGenerator = new ScriptGeneratorService();
   private storageService = new ScriptStorageService();
   private conversations: Map<string, ChatMessage[]> = new Map();
+  private currentUrls: Map<string, string> = new Map();
 
   constructor(private io: Server) {
     this.setupRoutes();
@@ -20,6 +21,71 @@ export class ChatController {
   }
 
   private setupRoutes() {
+    // Analyze page endpoint
+    this.router.post('/analyze-page', async (req, res) => {
+      try {
+        const { url } = req.body;
+        
+        if (!url) {
+          return res.status(400).json({ error: 'URL is required' });
+        }
+        
+        const pageContext = await this.nlpService.pageAnalyzer.analyzePage(url);
+        res.json({
+          success: true,
+          pageContext,
+          elementCount: pageContext.elements.length,
+          formCount: pageContext.forms.length
+        });
+      } catch (error) {
+        console.error('Page analysis error:', error);
+        res.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to analyze page'
+        });
+      }
+    });
+    
+    // Get element suggestions endpoint
+    this.router.post('/suggest-elements', async (req, res) => {
+      try {
+        const { url, action } = req.body;
+        
+        if (!url || !action) {
+          return res.status(400).json({ error: 'URL and action are required' });
+        }
+        
+        const pageContext = await this.nlpService.pageAnalyzer.analyzePage(url);
+        const suggestions = pageContext.elements
+          .filter(el => {
+            if (action === 'click') {
+              return el.tag === 'button' || el.tag === 'a' || el.type === 'submit';
+            } else if (action === 'type' || action === 'fill') {
+              return el.tag === 'input' || el.tag === 'textarea';
+            }
+            return true;
+          })
+          .slice(0, 10)
+          .map(el => ({
+            selector: el.selector,
+            text: el.text || el.placeholder || el.id || el.testId,
+            type: el.type,
+            tag: el.tag
+          }));
+          
+        res.json({
+          success: true,
+          suggestions
+        });
+      } catch (error) {
+        console.error('Element suggestion error:', error);
+        res.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to get suggestions'
+        });
+      }
+    });
+    
     this.router.post('/message', async (req, res) => {
       try {
         const { message, conversationId } = req.body;
@@ -125,7 +191,25 @@ export class ChatController {
             }
           } else {
             // Generate new script - check for multiple instructions
-            const intents = await this.nlpService.parseMultipleIntents(message);
+            const currentUrl = this.currentUrls.get(conversationId);
+            
+            // Check if message contains a navigation intent
+            const navMatch = message.match(/(?:go to|navigate to|visit|open)\s+(\S+)/i);
+            if (navMatch && navMatch[1]) {
+              const url = navMatch[1].startsWith('http') ? navMatch[1] : `https://${navMatch[1]}`;
+              this.currentUrls.set(conversationId, url);
+            }
+            
+            // Parse with context if we have a URL
+            const intents = await Promise.all(
+              (await this.nlpService.parseMultipleIntents(message)).map(async (intent) => {
+                if (currentUrl && intent.action !== 'navigate') {
+                  return await this.nlpService.parseIntentWithContext(message, currentUrl);
+                }
+                return intent;
+              })
+            );
+            
             if (intents.length > 1) {
               response = await this.scriptGenerator.generateFromMultipleIntents(intents, message);
             } else {

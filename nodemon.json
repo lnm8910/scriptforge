@@ -2,14 +2,27 @@
   "watch": ["src"],
   "ext": "ts,js",
   "ignore": [
+    "**/temp/**",
     "temp/**/*",
+    "temp/*",
+    "./temp/*",
     "/tmp/scriptforge-temp/**/*",
+    "**/tests/**",
+    "tests/**/*",
+    "tests/*",
+    "./tests/*",
     "tests/generated_*.spec.ts",
     "scripts.json",
     "node_modules/**/*",
     "dist/**/*",
     "*.log",
-    "screenshot-*.png"
+    "server.log",
+    "screenshot-*.png",
+    "test-results/**/*",
+    "playwright-report/**/*"
   ],
-  "exec": "ts-node src/server.ts"
+  "exec": "ts-node src/server.ts",
+  "env": {
+    "NODE_ENV": "development"
+  }
 }

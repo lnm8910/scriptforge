@@ -7,29 +7,53 @@ import { ScriptStorageService } from '../services/ScriptStorageService';
 
 export class ScriptController {
   private router = Router();
-  private scripts: Map<string, TestScript> = new Map();
   private scriptExecutor = new ScriptExecutorService();
   private storageService = new ScriptStorageService();
   private io?: Server;
 
   constructor(io?: Server) {
     this.io = io;
-    this.initializeStorage();
     this.setupRoutes();
   }
 
-  private async initializeStorage() {
-    try {
-      this.scripts = await this.storageService.loadScripts();
-    } catch (error) {
-      console.error('Failed to initialize script storage:', error);
-    }
-  }
-
   private setupRoutes() {
-    this.router.get('/', (req, res) => {
-      const scripts = Array.from(this.scripts.values());
-      res.json({ scripts });
+    // Search scripts route (must come before /:id)
+    this.router.get('/search', async (req, res) => {
+      try {
+        const query = req.query.q as string;
+        if (!query) {
+          return res.status(400).json({ error: 'Search query is required' });
+        }
+        const scripts = await this.storageService.searchScripts(query);
+        res.json({ scripts });
+      } catch (error) {
+        console.error('Error searching scripts:', error);
+        res.status(500).json({ error: 'Failed to search scripts' });
+      }
+    });
+
+    // Get all executions route (must come before /:id)
+    this.router.get('/executions/all', async (req, res) => {
+      try {
+        const scriptId = req.query.scriptId as string;
+        const limit = parseInt(req.query.limit as string) || 50;
+        const executions = await this.storageService.getExecutions(scriptId, limit);
+        res.json({ executions });
+      } catch (error) {
+        console.error('Error fetching all executions:', error);
+        res.status(500).json({ error: 'Failed to fetch executions' });
+      }
+    });
+
+    this.router.get('/', async (req, res) => {
+      try {
+        const scriptsMap = await this.storageService.loadScripts();
+        const scripts = Array.from(scriptsMap.values());
+        res.json({ scripts });
+      } catch (error) {
+        console.error('Error fetching scripts:', error);
+        res.status(500).json({ error: 'Failed to fetch scripts' });
+      }
     });
 
     this.router.post('/', async (req, res) => {
@@ -41,7 +65,7 @@ export class ScriptController {
         }
 
         const testScript: TestScript = {
-          id: uuidv4(),
+          id: '', // MongoDB will generate the ID
           name,
           description: description || '',
           script,
@@ -51,29 +75,32 @@ export class ScriptController {
           status: 'ready'
         };
 
-        this.scripts.set(testScript.id, testScript);
-        await this.storageService.saveScript(testScript);
+        const savedScript = await this.storageService.saveScript(testScript);
         
-        console.log('Script created with ID:', testScript.id);
-        console.log('Total scripts in store:', this.scripts.size);
-        res.status(201).json({ script: testScript });
+        console.log('Script created with ID:', savedScript.id);
+        res.status(201).json({ script: savedScript });
       } catch (error) {
         console.error('Error creating script:', error);
         res.status(500).json({ error: 'Failed to create script' });
       }
     });
 
-    this.router.get('/:id', (req, res) => {
-      const script = this.scripts.get(req.params.id);
-      if (!script) {
-        return res.status(404).json({ error: 'Script not found' });
+    this.router.get('/:id', async (req, res) => {
+      try {
+        const script = await this.storageService.getScript(req.params.id);
+        if (!script) {
+          return res.status(404).json({ error: 'Script not found' });
+        }
+        res.json({ script });
+      } catch (error) {
+        console.error('Error fetching script:', error);
+        res.status(500).json({ error: 'Failed to fetch script' });
       }
-      res.json({ script });
     });
 
     this.router.put('/:id', async (req, res) => {
       try {
-        const script = this.scripts.get(req.params.id);
+        const script = await this.storageService.getScript(req.params.id);
         if (!script) {
           return res.status(404).json({ error: 'Script not found' });
         }
@@ -90,11 +117,10 @@ export class ScriptController {
           updatedAt: new Date()
         };
 
-        this.scripts.set(script.id, updatedScript);
-        await this.storageService.saveScript(updatedScript);
+        const savedScript = await this.storageService.saveScript(updatedScript);
         
-        console.log(`Script updated: ${updatedScript.name} (${req.params.id})`);
-        res.json({ script: updatedScript });
+        console.log(`Script updated: ${savedScript.name} (${req.params.id})`);
+        res.json({ script: savedScript });
       } catch (error) {
         console.error('Update script error:', error);
         res.status(500).json({ error: 'Failed to update script' });
@@ -103,15 +129,13 @@ export class ScriptController {
 
     this.router.delete('/:id', async (req, res) => {
       try {
-        const script = this.scripts.get(req.params.id);
+        const script = await this.storageService.getScript(req.params.id);
         if (!script) {
           return res.status(404).json({ error: 'Script not found' });
         }
 
-        const deleted = this.scripts.delete(req.params.id);
+        const deleted = await this.storageService.deleteScript(req.params.id);
         if (deleted) {
-          // Save the updated scripts to storage
-          await this.storageService.saveScriptsDebounced(this.scripts);
           console.log(`Script deleted: ${script.name} (${req.params.id})`);
         }
 
@@ -128,18 +152,18 @@ export class ScriptController {
     this.router.post('/:id/execute', async (req, res) => {
       try {
         console.log('Attempting to execute script with ID:', req.params.id);
-        console.log('Available script IDs:', Array.from(this.scripts.keys()));
         
-        const script = this.scripts.get(req.params.id);
+        const script = await this.storageService.getScript(req.params.id);
         if (!script) {
-          console.log('Script not found in memory store');
+          console.log('Script not found in database');
           return res.status(404).json({ error: 'Script not found' });
         }
 
+        // Create execution record
+        const executionId = await this.storageService.createExecution(script.id, script.name);
+        
         script.status = 'running';
-        this.scripts.set(script.id, script);
-        // Use debounced save to prevent nodemon restarts
-        await this.storageService.saveScriptsDebounced(this.scripts);
+        await this.storageService.saveScript(script);
 
         console.log(`Executing script ${script.id}: ${script.name}`);
         
@@ -162,24 +186,38 @@ export class ScriptController {
         
         console.log(`Script execution completed:`, result);
         
+        // Update execution record
+        await this.storageService.updateExecution(executionId, {
+          status: result.success ? 'completed' : 'failed',
+          endTime: new Date(),
+          output: result.output,
+          error: result.error,
+          screenshots: result.screenshots,
+          testResults: {
+            passed: result.success ? 1 : 0,
+            failed: result.success ? 0 : 1,
+            skipped: 0,
+            total: 1
+          }
+        });
+        
         script.status = result.success ? 'completed' : 'failed';
         script.updatedAt = new Date();
-        this.scripts.set(script.id, script);
-        await this.storageService.saveScriptsDebounced(this.scripts);
+        await this.storageService.saveScript(script);
 
         res.json({ 
           result,
-          script: this.scripts.get(script.id)
+          script: await this.storageService.getScript(script.id),
+          executionId
         });
       } catch (error) {
         console.error('Script execution error:', error);
         
-        const script = this.scripts.get(req.params.id);
+        const script = await this.storageService.getScript(req.params.id);
         if (script) {
           script.status = 'failed';
           script.updatedAt = new Date();
-          this.scripts.set(script.id, script);
-          await this.storageService.saveScriptsDebounced(this.scripts);
+          await this.storageService.saveScript(script);
         }
         
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -193,14 +231,14 @@ export class ScriptController {
         
         res.json({
           result,
-          script: this.scripts.get(req.params.id)
+          script: await this.storageService.getScript(req.params.id)
         });
       }
     });
 
     this.router.post('/:id/validate', async (req, res) => {
       try {
-        const script = this.scripts.get(req.params.id);
+        const script = await this.storageService.getScript(req.params.id);
         if (!script) {
           return res.status(404).json({ error: 'Script not found' });
         }
@@ -216,18 +254,47 @@ export class ScriptController {
       }
     });
 
-    this.router.get('/:id/download', (req, res) => {
-      const script = this.scripts.get(req.params.id);
-      if (!script) {
-        return res.status(404).json({ error: 'Script not found' });
-      }
+    this.router.get('/:id/download', async (req, res) => {
+      try {
+        const script = await this.storageService.getScript(req.params.id);
+        if (!script) {
+          return res.status(404).json({ error: 'Script not found' });
+        }
 
       const filename = `${script.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.spec.ts`;
       
-      res.setHeader('Content-Type', 'application/typescript');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      res.send(script.script);
+        res.setHeader('Content-Type', 'application/typescript');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(script.script);
+      } catch (error) {
+        console.error('Download script error:', error);
+        res.status(500).json({ error: 'Failed to download script' });
+      }
     });
+
+    // Get execution history for a script
+    this.router.get('/:id/executions', async (req, res) => {
+      try {
+        const limit = parseInt(req.query.limit as string) || 50;
+        const executions = await this.storageService.getExecutions(req.params.id, limit);
+        res.json({ executions });
+      } catch (error) {
+        console.error('Error fetching executions:', error);
+        res.status(500).json({ error: 'Failed to fetch execution history' });
+      }
+    });
+
+    // Get execution statistics for a script
+    this.router.get('/:id/stats', async (req, res) => {
+      try {
+        const stats = await this.storageService.getExecutionStats(req.params.id);
+        res.json({ stats });
+      } catch (error) {
+        console.error('Error fetching execution stats:', error);
+        res.status(500).json({ error: 'Failed to fetch execution statistics' });
+      }
+    });
+
   }
 
   public getRouter() {

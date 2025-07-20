@@ -43,6 +43,19 @@ coverage/
 # Temporary folders
 tmp/
 temp/
+tests/generated_*.spec.ts
+tests/*.spec.ts
 
-# Script storage
+# Script storage (deprecated - now using MongoDB)
 scripts.json
+
+# MongoDB
+*.mongodb
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+screenshots/
+*.png
+*.jpg

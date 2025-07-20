@@ -7,6 +7,7 @@ import path from 'path';
 
 import { ChatController } from './controllers/ChatController';
 import { ScriptController } from './controllers/ScriptController';
+import databaseService from './services/database';
 
 dotenv.config();
 
@@ -43,6 +44,40 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`ScriptForge server running on port ${PORT}`);
+async function startServer() {
+  try {
+    // Connect to MongoDB
+    await databaseService.connect();
+    console.log('Connected to MongoDB successfully');
+
+    // Start the server
+    server.listen(PORT, () => {
+      console.log(`ScriptForge server running on port ${PORT}`);
+      console.log(`MongoDB URI: ${process.env.MONGODB_URI || 'mongodb://localhost:27017/scriptforge'}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+// Handle graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('\nShutting down gracefully...');
+  await databaseService.disconnect();
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });
+
+process.on('SIGTERM', async () => {
+  console.log('\nShutting down gracefully...');
+  await databaseService.disconnect();
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+startServer();

@@ -92,41 +92,67 @@ test('Generated test from user input', async ({ page }) => {`;
     switch (intent.action) {
       case 'navigate':
         if (intent.url) {
-          steps.push(`  await page.goto('${intent.url}');`);
+          steps.push(`  await page.goto('${this.escapeString(intent.url)}');`);
         }
         break;
         
       case 'click':
-        const clickSelector = this.generateSelector(intent);
-        steps.push(`  await page.click('${clickSelector}');`);
+        try {
+          const clickSelector = this.generateSelector(intent);
+          steps.push(`  await page.click(${this.formatSelector(clickSelector)});`);
+        } catch (error) {
+          // If we can't generate a valid selector, add a comment explaining the issue
+          steps.push(`  // TODO: Could not determine selector for "${intent.target || 'unknown target'}"`);
+          steps.push(`  // Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          console.warn('Selector generation failed:', error);
+        }
         break;
         
       case 'type':
-        const typeSelector = this.generateSelector(intent);
-        if (intent.value) {
-          steps.push(`  await page.fill('${typeSelector}', '${intent.value}');`);
-          // If it's a search, also add Enter key press
-          if (intent.target?.toLowerCase().includes('search')) {
-            steps.push(`  await page.keyboard.press('Enter');`);
+        try {
+          const typeSelector = this.generateSelector(intent);
+          if (intent.value) {
+            steps.push(`  await page.fill(${this.formatSelector(typeSelector)}, '${this.escapeString(intent.value)}');`);
+            // If it's a search, also add Enter key press
+            if (intent.target?.toLowerCase().includes('search')) {
+              steps.push(`  await page.keyboard.press('Enter');`);
+            }
+          } else {
+            steps.push(`  // TODO: No value specified for type action`);
           }
+        } catch (error) {
+          steps.push(`  // TODO: Could not determine selector for "${intent.target || 'unknown target'}"`);
+          steps.push(`  // Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
         break;
         
       case 'assert':
         if (intent.target?.includes('title')) {
-          steps.push(`  await expect(page).toHaveTitle('${intent.value || ''}');`);
+          steps.push(`  await expect(page).toHaveTitle('${this.escapeString(intent.value || '')}');`);
         } else if (intent.target?.includes('text') || intent.value) {
-          steps.push(`  await expect(page.locator('body')).toContainText('${intent.value || ''}');`);
+          steps.push(`  await expect(page.locator('body')).toContainText('${this.escapeString(intent.value || '')}');`);
         } else {
-          steps.push(`  await expect(page.locator('${this.generateSelector(intent)}')).toBeVisible();`);
+          try {
+            const assertSelector = this.generateSelector(intent);
+            steps.push(`  await expect(page.locator(${this.formatSelector(assertSelector)})).toBeVisible();`);
+          } catch (error) {
+            steps.push(`  // TODO: Could not determine what to assert for "${intent.target || 'unknown target'}"`);
+            steps.push(`  // Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
         }
         break;
         
       case 'wait':
         const waitTime = intent.value ? parseInt(intent.value) : 1000;
         if (intent.target) {
-          const waitSelector = this.generateSelector(intent);
-          steps.push(`  await page.waitForSelector('${waitSelector}');`);
+          try {
+            const waitSelector = this.generateSelector(intent);
+            steps.push(`  await page.waitForSelector(${this.formatSelector(waitSelector)});`);
+          } catch (error) {
+            steps.push(`  // TODO: Could not determine selector to wait for "${intent.target}"`);
+            steps.push(`  // Falling back to timeout wait`);
+            steps.push(`  await page.waitForTimeout(${waitTime});`);
+          }
         } else {
           steps.push(`  await page.waitForTimeout(${waitTime});`);
         }
@@ -137,9 +163,14 @@ test('Generated test from user input', async ({ page }) => {`;
         break;
         
       case 'extract':
-        const extractSelector = this.generateSelector(intent);
-        steps.push(`  const text = await page.textContent('${extractSelector}');`);
-        steps.push(`  console.log('Extracted text:', text);`);
+        try {
+          const extractSelector = this.generateSelector(intent);
+          steps.push(`  const text = await page.textContent(${this.formatSelector(extractSelector)});`);
+          steps.push(`  console.log('Extracted text:', text);`);
+        } catch (error) {
+          steps.push(`  // TODO: Could not determine selector to extract from "${intent.target || 'unknown target'}"`);
+          steps.push(`  // Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
         break;
         
       default:
@@ -150,18 +181,29 @@ test('Generated test from user input', async ({ page }) => {`;
   }
 
   private generateSelector(intent: UserIntent): string {
+    // If we have a selector from context-aware parsing, use it
     if (intent.selector) {
       return intent.selector;
     }
     
+    // If we have page context, try to find the best element
+    if (intent.pageContext && intent.target) {
+      const bestMatch = this.findElementInContext(intent.target, intent.pageContext.elements, intent.action);
+      if (bestMatch) {
+        return bestMatch.selector;
+      }
+    }
+    
+    // Fallback to original logic
     if (!intent.target) {
-      return 'body';
+      // Instead of returning 'body', throw an error or return a meaningful default
+      throw new Error(`Cannot generate selector: No target specified for ${intent.action} action`);
     }
     
     const target = intent.target.toLowerCase();
     
     const selectorMappings: Record<string, string[]> = {
-      'login': ['button:has-text("login")', '[data-testid="login"]', '.login-btn', '#login'],
+      'login': ['button:has-text("Login")', '[data-testid="login"]', '.login-btn', '#login'],
       'submit': ['button[type="submit"]', 'input[type="submit"]', '.submit-btn'],
       'search': ['input[name="q"]', 'input[type="search"]', '[placeholder*="search" i]', '.search-input', '#search'],
       'search box': ['input[name="q"]', 'input[type="search"]', '[placeholder*="search" i]', '.search-input', '#search'],
@@ -196,6 +238,51 @@ test('Generated test from user input', async ({ page }) => {`;
     }
     
     return `text="${target}"`;
+  }
+
+  private findElementInContext(target: string, elements: any[], action: string): any | null {
+    const targetLower = target.toLowerCase();
+    
+    // Filter elements based on action type
+    let candidates = elements;
+    if (action === 'click') {
+      candidates = elements.filter(el => 
+        el.tag === 'button' || el.tag === 'a' || 
+        el.type === 'submit' || el.type === 'button'
+      );
+    } else if (action === 'type' || action === 'fill') {
+      candidates = elements.filter(el => 
+        el.tag === 'input' || el.tag === 'textarea' || el.tag === 'select'
+      );
+    }
+    
+    // Score and find best match
+    let bestMatch = null;
+    let bestScore = 0;
+    
+    for (const element of candidates) {
+      let score = 0;
+      
+      if (element.text && element.text.toLowerCase().includes(targetLower)) {
+        score += 10;
+      }
+      if (element.placeholder && element.placeholder.toLowerCase().includes(targetLower)) {
+        score += 8;
+      }
+      if (element.testId && element.testId.toLowerCase().includes(targetLower)) {
+        score += 9;
+      }
+      if (element.id && element.id.toLowerCase().includes(targetLower)) {
+        score += 7;
+      }
+      
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = element;
+      }
+    }
+    
+    return bestMatch;
   }
 
   private generateSuggestions(intent: UserIntent): string[] {
@@ -244,12 +331,38 @@ test('Generated test from user input', async ({ page }) => {`;
   generateFullTestSuite(intents: UserIntent[], testName: string = 'Generated Test Suite'): string {
     const imports = `import { test, expect } from '@playwright/test';
 
-test('${testName}', async ({ page }) => {`;
+test('${this.escapeString(testName)}', async ({ page }) => {`;
 
     const allSteps = intents.map(intent => this.generateSteps(intent)).join('\n\n');
     
     const closing = `});`;
 
     return `${imports}\n${allSteps}\n${closing}`;
+  }
+
+  private escapeString(str: string): string {
+    // Escape single quotes and backslashes for use in single-quoted strings
+    return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  }
+
+  private formatSelector(selector: string): string {
+    // If the selector already contains quotes, use it as-is
+    // Otherwise, wrap it in single quotes
+    if (selector.includes("'") || selector.includes('"')) {
+      // If selector contains single quotes, use double quotes
+      if (selector.includes("'") && !selector.includes('"')) {
+        return `"${selector}"`;
+      }
+      // If selector contains double quotes, escape and use single quotes
+      if (selector.includes('"') && !selector.includes("'")) {
+        return `'${selector}'`;
+      }
+      // If it contains both, use backticks
+      if (selector.includes("'") && selector.includes('"')) {
+        return `\`${selector}\``;
+      }
+    }
+    // Default to single quotes
+    return `'${selector}'`;
   }
 }

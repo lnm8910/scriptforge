@@ -28,6 +28,14 @@ export class ScriptExecutorService {
     this.ensureTempDir();
   }
 
+  /**
+   * Architecture Note:
+   * - Scripts are permanently stored in MongoDB
+   * - Execution history and results are stored in MongoDB
+   * - Temporary files are created only for Playwright execution (Playwright requires physical files)
+   * - These temp files are automatically cleaned up after execution
+   */
+
   private async ensureTempDir() {
     try {
       await fs.mkdir(this.tempDir, { recursive: true });
@@ -51,8 +59,11 @@ export class ScriptExecutorService {
           type: 'info'
         });
       }
+      
+      // Create temporary file for Playwright execution
+      // Note: Playwright requires physical files to run tests
       tempFilePath = await this.writeScriptToFile(script);
-      console.log(`Script written to temp file: ${tempFilePath}`);
+      console.log(`Creating temporary execution file: ${path.basename(tempFilePath)}`);
       
       // Skip validation for now to avoid temp file conflicts
       // We'll add content validation without creating temp files
