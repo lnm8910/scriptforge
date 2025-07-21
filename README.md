@@ -20,6 +20,7 @@ ScriptForge is an intelligent test automation platform that transforms natural l
 ## Features
 
 - 🤖 **Conversational AI**: Chat with ScriptForge to describe what you want to test
+- 🧠 **AI-Powered Script Generation**: Leverages AI to generate complete, intelligent test scripts
 - 🎭 **Playwright Integration**: Generates production-ready Playwright TypeScript test scripts
 - 🔄 **Real-time Generation**: Watch your tests being created as you chat
 - 📝 **Script Management**: Save, organize, and download your generated scripts
@@ -211,7 +212,7 @@ src/
 │   ├── ContextAwareNLPService.ts # Enhanced NLP with page context
 │   ├── PageAnalyzerService.ts    # Web page analysis and element discovery
 │   ├── database.ts           # MongoDB connection service
-│   ├── ScriptGeneratorService.ts # Script generation logic
+│   ├── ScriptGeneratorService.ts # AI-powered script generation
 │   ├── ScriptExecutorService.ts  # Script execution logic
 │   └── ScriptStorageService.ts   # MongoDB data operations
 ├── types/              # TypeScript type definitions
@@ -441,6 +442,7 @@ This project is licensed under the ISC License.
 ## Changelog
 
 ### Latest Updates
+- **AI-Powered Script Generation**: Completely delegated script generation to AI for more intelligent and flexible test creation
 - **Context-Aware Generation**: Added intelligent page analysis for accurate selector generation
 - **Multiple AI Providers**: Added support for Anthropic Claude (default) and Google Gemini
 - **Enhanced Error Handling**: Improved error messages and fallback mechanisms

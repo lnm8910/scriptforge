@@ -107,7 +107,27 @@ export class ChatController {
 
         this.conversations.get(conversationId)!.push(userMessage);
 
-        const intents = await this.nlpService.parseMultipleIntents(message);
+        // Parse intents and enhance with page context if URL is found
+        const baseIntents = await this.nlpService.parseMultipleIntents(message);
+        let intents;
+        
+        try {
+          intents = await Promise.all(
+            baseIntents.map(async (intent) => {
+              if (intent.url) {
+                return await this.nlpService.parseIntentWithContext(message, intent.url);
+              }
+              return intent;
+            })
+          );
+        } catch (error) {
+          // If page analysis fails, return error to user
+          return res.status(400).json({ 
+            error: error instanceof Error ? error.message : 'Failed to analyze page',
+            suggestion: 'Please ensure the URL is accessible and try again.'
+          });
+        }
+        
         let response;
         if (intents.length > 1) {
           response = await this.scriptGenerator.generateFromMultipleIntents(intents, message);
@@ -200,15 +220,39 @@ export class ChatController {
               this.currentUrls.set(conversationId, url);
             }
             
-            // Parse with context if we have a URL
-            const intents = await Promise.all(
-              (await this.nlpService.parseMultipleIntents(message)).map(async (intent) => {
-                if (currentUrl && intent.action !== 'navigate') {
-                  return await this.nlpService.parseIntentWithContext(message, currentUrl);
-                }
-                return intent;
-              })
-            );
+            // Parse intents first
+            const baseIntents = await this.nlpService.parseMultipleIntents(message);
+            
+            // For each intent, check if it has a URL or if we should use current URL
+            let intents;
+            try {
+              intents = await Promise.all(
+                baseIntents.map(async (intent) => {
+                  // If intent has its own URL (like navigation), use that
+                  // Otherwise use current URL if available
+                  const urlToAnalyze = intent.url || currentUrl;
+                  
+                  if (urlToAnalyze) {
+                    // Always use context-aware parsing when we have a URL
+                    return await this.nlpService.parseIntentWithContext(
+                      message, 
+                      urlToAnalyze
+                    );
+                  }
+                  return intent;
+                })
+              );
+            } catch (error) {
+              // Send error message to user via socket
+              const errorMessage: ChatMessage = {
+                id: uuidv4(),
+                content: `Error: ${error instanceof Error ? error.message : 'Failed to analyze page'}. Please ensure the URL is accessible and try again.`,
+                role: 'assistant',
+                timestamp: new Date()
+              };
+              this.io.to(conversationId).emit('message', errorMessage);
+              return; // Stop processing
+            }
             
             if (intents.length > 1) {
               response = await this.scriptGenerator.generateFromMultipleIntents(intents, message);

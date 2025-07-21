@@ -31,6 +31,7 @@ export interface PageContext {
   title: string;
   elements: ElementInfo[];
   forms: FormInfo[];
+  domContent?: string;
   timestamp: Date;
 }
 

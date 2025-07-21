@@ -21,6 +21,7 @@ export interface PageContext {
   title: string;
   elements: ElementInfo[];
   forms: FormInfo[];
+  domContent?: string;
   timestamp: Date;
 }
 
@@ -49,6 +50,15 @@ export class PageAnalyzerService {
       const title = await page.title();
       const elements = await this.extractElements(page);
       const forms = await this.extractForms(page);
+      const domContent = await this.extractDOMContent(page);
+
+      // Log DOM content details
+      console.log('\n=== Page Analysis DOM Content ===');
+      console.log('URL:', url);
+      console.log('DOM content length:', domContent.length, 'characters');
+      console.log('First 1000 characters of DOM:');
+      console.log(domContent.substring(0, 1000) + (domContent.length > 1000 ? '\n... (truncated)' : ''));
+      console.log('=== End DOM Content ===\n');
 
       await page.close();
 
@@ -57,6 +67,7 @@ export class PageAnalyzerService {
         title,
         elements,
         forms,
+        domContent,
         timestamp: new Date()
       };
     } catch (error) {
@@ -81,9 +92,19 @@ export class PageAnalyzerService {
         
         // Try unique class combination
         if (el.classList.length > 0) {
-          const classSelector = `.${Array.from(el.classList).join('.')}`;
-          if (document.querySelectorAll(classSelector).length === 1) {
-            return classSelector;
+          try {
+            // Escape special characters in class names (for Tailwind CSS)
+            const escapedClasses = Array.from(el.classList).map(cls => 
+              cls.replace(/([:\[\](){},.>~+\s])/g, '\\\\$1')
+            );
+            const classSelector = `.${escapedClasses.join('.')}`;
+            // Test if selector is valid before using it
+            document.querySelector(classSelector);
+            if (document.querySelectorAll(classSelector).length === 1) {
+              return classSelector;
+            }
+          } catch (e) {
+            // If selector is invalid, skip class-based selection
           }
         }
         
@@ -262,6 +283,71 @@ export class PageAnalyzerService {
     }
   }
 
+
+  private async extractDOMContent(page: Page): Promise<string> {
+    try {
+      // Extract a cleaned version of the DOM that focuses on structure and content
+      const domContent = await page.evaluate(() => {
+        const cleanElement = (element: Element): any => {
+          const tagName = element.tagName.toLowerCase();
+          
+          // Skip script and style tags
+          if (tagName === 'script' || tagName === 'style') {
+            return null;
+          }
+          
+          const result: any = {
+            tag: tagName
+          };
+          
+          // Add important attributes
+          const importantAttrs = ['id', 'class', 'data-testid', 'name', 'type', 'placeholder', 
+                                  'aria-label', 'role', 'href', 'value', 'for', 'title'];
+          
+          importantAttrs.forEach(attr => {
+            const value = element.getAttribute(attr);
+            if (value) {
+              result[attr] = value;
+            }
+          });
+          
+          // Add text content for leaf nodes
+          if (element.children.length === 0) {
+            const text = element.textContent?.trim();
+            if (text && text.length > 0 && text.length < 200) {
+              result.text = text;
+            }
+          }
+          
+          // Recursively process children
+          const children = Array.from(element.children)
+            .map(child => cleanElement(child))
+            .filter(child => child !== null);
+          
+          if (children.length > 0) {
+            result.children = children;
+          }
+          
+          return result;
+        };
+        
+        // Start from body or main content area
+        const mainContent = document.querySelector('main') || document.querySelector('[role="main"]') || document.body;
+        return JSON.stringify(cleanElement(mainContent), null, 2);
+      });
+      
+      // Limit DOM content to reasonable size (e.g., 50KB)
+      const maxLength = 50000;
+      if (domContent.length > maxLength) {
+        return domContent.substring(0, maxLength) + '\n... (truncated)';
+      }
+      
+      return domContent;
+    } catch (error) {
+      console.error('Error extracting DOM content:', error);
+      return '';
+    }
+  }
 
   async cleanup() {
     if (this.browser) {

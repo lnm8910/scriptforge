@@ -36,23 +36,86 @@ export class NLPService {
 
   async parseMultipleIntents(userInput: string): Promise<UserIntent[]> {
     try {
-      // Split input by quoted sections or sentence boundaries
-      const instructions = this.extractInstructions(userInput);
+      // Ask AI to parse ALL intents at once
+      const prompt = `You are a test automation assistant. Parse this user instruction into one or more JSON objects for Playwright automation.
+
+User instruction: "${userInput}"
+
+Analyze the instruction and identify ALL actions requested. Common patterns:
+- "navigate to X and click Y" = 2 actions: [{"action":"navigate"}, {"action":"click"}]
+- "go to X, fill form with Y, and submit" = 3 actions
+- "type X in field Y" = 1 action
+- "click A then click B" = 2 actions
+
+Each JSON object must have these exact fields:
+- action: Must be EXACTLY one of: navigate, click, type, fill, assert, wait, screenshot
+- target: Description of element (required for click, type, fill, assert)
+- value: Text to type or expected value (required for type, fill, text assertions)
+- selector: CSS or text selector (optional but recommended)
+- url: URL to navigate to (required only for navigate)
+- confidence: Number between 0 and 1
+
+IMPORTANT: Return a JSON array containing ALL actions found in the instruction.
+Example: [{"action":"navigate","url":"https://example.com","confidence":0.9},{"action":"click","target":"login button","confidence":0.8}]
+
+Return ONLY the JSON array, no markdown, no explanation.`;
+
+      let content: string;
       
-      if (instructions.length <= 1) {
-        // Single instruction, use existing method
+      if (this.provider === 'anthropic' && this.anthropic) {
+        const response = await this.anthropic.messages.create({
+          model: 'claude-3-haiku-20240307',
+          max_tokens: 1024,
+          messages: [{
+            role: 'user',
+            content: prompt
+          }]
+        });
+        
+        content = response.content[0].type === 'text' ? response.content[0].text : '';
+        console.log('Raw Anthropic multi-intent response:', content);
+      } else if (this.provider === 'gemini' && this.genAI) {
+        const result = await this.model.generateContent(prompt);
+        const response = await result.response;
+        content = response.text();
+        console.log('Raw Gemini multi-intent response:', content);
+      } else {
+        throw new Error('No AI provider configured');
+      }
+
+      // Clean and parse response
+      let cleanContent = content.trim();
+      cleanContent = cleanContent.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
+      
+      // Handle case where AI returns multiple objects separated by commas but not in array
+      if (cleanContent.startsWith('{') && cleanContent.includes('},{')) {
+        cleanContent = '[' + cleanContent + ']';
+      }
+      
+      let intents: any[];
+      try {
+        intents = JSON.parse(cleanContent);
+        if (!Array.isArray(intents)) {
+          // If single object returned, wrap in array
+          intents = [intents];
+        }
+      } catch (parseError) {
+        console.error('Failed to parse multi-intent response:', parseError);
+        console.error('Content:', cleanContent);
+        // Fallback to single intent
         const singleIntent = await this.parseIntent(userInput);
         return [singleIntent];
       }
       
-      // Parse each instruction separately
-      const intents: UserIntent[] = [];
-      for (const instruction of instructions) {
-        const intent = await this.parseIntent(instruction);
-        intents.push(intent);
-      }
-      
-      return intents;
+      // Validate each intent has required fields
+      return intents.filter(intent => intent && intent.action).map(intent => ({
+        action: intent.action,
+        confidence: intent.confidence || 0.5,
+        target: intent.target,
+        value: intent.value,
+        selector: intent.selector,
+        url: intent.url
+      } as UserIntent));
     } catch (error) {
       console.error('Multiple intents parsing error:', error);
       // Fallback to single intent parsing

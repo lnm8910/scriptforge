@@ -16,17 +16,32 @@ export class ContextAwareNLPService extends NLPService {
     
     // If we have a URL (either from intent or provided), analyze the page
     const url = baseIntent.url || currentUrl;
-    if (url && baseIntent.action !== 'navigate') {
+    if (url) {
       try {
+        console.log(`\n=== Analyzing page for context: ${url} ===`);
         const pageContext = await this.pageAnalyzer.analyzePage(url);
         
-        // Find the best matching element based on the intent
-        const enhancedIntent = await this.enhanceIntentWithPageContext(baseIntent, pageContext, userInput);
-        enhancedIntent.pageContext = pageContext;
+        // Always attach page context, even for navigation actions
+        // This ensures AI knows what's actually on the page
+        baseIntent.pageContext = pageContext;
         
-        return enhancedIntent;
+        // For non-navigation actions, also enhance with element matching
+        if (baseIntent.action !== 'navigate') {
+          const enhancedIntent = await this.enhanceIntentWithPageContext(baseIntent, pageContext, userInput);
+          enhancedIntent.pageContext = pageContext;
+          return enhancedIntent;
+        }
+        
+        console.log(`Page analyzed: ${pageContext.elements.length} elements, ${pageContext.forms.length} forms found`);
+        return baseIntent;
       } catch (error) {
-        console.warn('Could not analyze page, falling back to base intent:', error);
+        console.error('Page analysis failed:', error);
+        // For navigation actions, we MUST have page context to generate valid tests
+        if (baseIntent.action === 'navigate') {
+          throw new Error(`Failed to analyze page at ${url}. Cannot generate accurate test without page context. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+        // For other actions, we can warn but continue
+        console.warn('Could not analyze page, continuing without page context');
         return baseIntent;
       }
     }
@@ -78,6 +93,17 @@ export class ContextAwareNLPService extends NLPService {
         if (suggestion.elementInfo) {
           // Store additional element info for better error messages
           (enhancedIntent as any).elementInfo = suggestion.elementInfo;
+        }
+        
+        if (suggestion.substituted) {
+          // Store substitution info to inform the user
+          (enhancedIntent as any).substituted = true;
+          (enhancedIntent as any).substitutionNote = suggestion.substitutionNote;
+          
+          // Update the target to reflect what was actually found
+          if (suggestion.elementInfo?.text) {
+            enhancedIntent.target = suggestion.elementInfo.text;
+          }
         }
       }
     } catch (error) {
@@ -133,15 +159,25 @@ Target description: ${intent.target || 'not specified'}
 Available interactive elements on the page:
 ${elementsDescription}
 
+IMPORTANT RULES:
+1. You MUST choose a selector from the list above - do NOT make up selectors
+2. If the user asks for an element that doesn't exist (e.g., "form link" when only "Start Registration" exists):
+   - Choose the closest matching element
+   - Explain the substitution in the reasoning
+3. NEVER return a selector that's not in the list above
+
 Based on the user's instruction and available elements, return a JSON object with:
 {
   "selector": "the most appropriate selector from the list above",
   "confidence": 0.1-1.0,
-  "reasoning": "brief explanation of why this selector was chosen",
+  "reasoning": "brief explanation, including any substitutions made",
   "elementInfo": {
-    "text": "visible text if any",
-    "type": "element type"
-  }
+    "text": "actual visible text",
+    "type": "element type",
+    "actualMatch": "what the user asked for vs what was found"
+  },
+  "substituted": true/false,
+  "substitutionNote": "explanation if element was substituted"
 }
 
 Choose the selector that best matches the user's intent. Prefer:
